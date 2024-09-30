@@ -91,7 +91,6 @@ namespace nil {
                     component_calls &statistics,
                     const common_component_parameters& param) {
 
-                using var = crypto3::zk::snark::plonk_variable<typename BlueprintFieldType::value_type>;
 
                 using ArithmetizationType = crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>;
                 using component_type = components::complete_addition<ArithmetizationType, CurveType,

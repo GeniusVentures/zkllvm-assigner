@@ -37,7 +37,11 @@
 
 #include <iostream>
 #include <fstream>
+#ifdef _USE_INSTALLED_BOOST_JSON_
+#include <boost/json.hpp>
+#else
 #include <boost/json/src.hpp>
+#endif
 
 #include <nil/blueprint/logger.hpp>
 

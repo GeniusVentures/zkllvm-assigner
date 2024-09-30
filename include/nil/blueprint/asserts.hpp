@@ -37,21 +37,22 @@
 
 namespace nil {
     namespace blueprint {
-        [[noreturn]] void abort_process() {
+        [[noreturn]] inline void abort_process() {
             std::abort();
         }
 
-        [[noreturn]] void unreachable(const char *msg, const char *filename, unsigned line) {
+        [[noreturn]] inline void unreachable(const char *msg, const char *filename, unsigned line) {
             std::cerr << "UNREACHABLE at " << filename << ":" << line << std::endl;
-            std::cerr <<'\t' << msg << std::endl;
+            std::cerr << '\t' << msg << std::endl;
             abort_process();
         }
 
-        [[noreturn]] void unreachable(const std::string &msg, const char *filename, unsigned line) {
-            unreachable(msg.c_str(),filename, line);
+        [[noreturn]] inline void unreachable(const std::string &msg, const char *filename, unsigned line) {
+            unreachable(msg.c_str(), filename, line);
         }
 
-        void assert_check(bool expr, const char *expr_str, const char *filename, unsigned line, const char *msg = "") {
+        inline void assert_check(bool expr, const char *expr_str, const char *filename, unsigned line,
+                                 const char *msg = "") {
             if (!expr) {
                 std::cerr << "Assertion failed at " << filename << ":" << line << ":" << std::endl;
                 std::cerr << '\t' << expr_str;
@@ -62,7 +63,7 @@ namespace nil {
                 abort_process();
             }
         }
-    }
-}
+    }    // namespace blueprint
+}    // namespace nil
 
-#endif  // CRYPTO3_ASSIGNER_NIL_BLUEPRINT_ASSERTS_HPP
+#endif    // CRYPTO3_ASSIGNER_NIL_BLUEPRINT_ASSERTS_HPP

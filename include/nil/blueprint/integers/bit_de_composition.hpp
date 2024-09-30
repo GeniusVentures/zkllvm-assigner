@@ -156,7 +156,6 @@ namespace nil {
             component_calls &statistics,
             const common_component_parameters& param) {
 
-            using non_native_policy_type = basic_non_native_policy<BlueprintFieldType>;
             using component_type = nil::blueprint::components::bit_composition<
                     crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>>;
 

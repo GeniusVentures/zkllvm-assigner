@@ -108,35 +108,23 @@
 namespace nil {
     namespace blueprint {
 
-        enum print_format {
-            no_print,
-            dec,
-            hex
-        };
+        enum print_format { no_print, dec, hex };
 
         template<typename BlueprintFieldType>
         struct assigner {
 
-            assigner(
-                crypto3::zk::snark::plonk_table_description<BlueprintFieldType> desc,
-                long stack_size,
-                boost::log::trivial::severity_level log_level,
-                std::uint32_t max_num_provers,
-                std::uint32_t target_prover_idx,
-                generation_mode gen_mode,
-                const std::string &kind = "",
-                print_format output_print_format = no_print,
-                bool check_validity = false
-            ) :
-                memory(stack_size),
-                maxNumProvers(max_num_provers),
-                targetProverIdx(target_prover_idx),
-                currProverIdx(0),
-                log(log_level),
-                print_output_format(output_print_format),
-                validity_check(check_validity),
-                gen_mode(gen_mode)
-            {
+            assigner(crypto3::zk::snark::plonk_table_description<BlueprintFieldType> desc,
+                     long stack_size,
+                     boost::log::trivial::severity_level log_level,
+                     std::uint32_t max_num_provers,
+                     std::uint32_t target_prover_idx,
+                     generation_mode gen_mode,
+                     const std::string &kind = "",
+                     print_format output_print_format = no_print,
+                     bool check_validity = false) :
+                memory(stack_size), maxNumProvers(max_num_provers), targetProverIdx(target_prover_idx),
+                currProverIdx(0), log(log_level), print_output_format(output_print_format),
+                validity_check(check_validity), gen_mode(gen_mode) {
 
                 detail::PolicyManager::set_policy(kind);
 
@@ -148,15 +136,15 @@ namespace nil {
 
             using ArithmetizationType = crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>;
             using var = crypto3::zk::snark::plonk_variable<typename BlueprintFieldType::value_type>;
-            using branch_desc = std::pair<bool/*is true branch*/, std::uint32_t/*size of call_stack on start branch*/>;
+            using branch_desc =
+                std::pair<bool /*is true branch*/, std::uint32_t /*size of call_stack on start branch*/>;
 
             std::vector<circuit_proxy<ArithmetizationType>> circuits;
             std::vector<assignment_proxy<ArithmetizationType>> assignments;
 
         private:
-
             struct AssignerState {
-                AssignerState(const assigner& p) {
+                AssignerState(const assigner &p) {
                     predecessor = p.predecessor;
                     currProverIdx = p.currProverIdx;
                     cpp_values = p.cpp_values;
@@ -170,31 +158,31 @@ namespace nil {
                 bool finished;
             };
 
-            bool check_operands_constantness(const llvm::CallInst *inst, std::vector<std::size_t> constants_positions, stack_frame<var> &frame) {
+            bool check_operands_constantness(const llvm::CallInst *inst, std::vector<std::size_t> constants_positions,
+                                             stack_frame<var> &frame) {
                 bool is_const;
                 for (std::size_t i = 0; i < inst->getNumOperands() - 1; i++) {
                     is_const = false;
                     for (std::size_t j = 0; j < constants_positions.size(); j++) {
-                        if(i == constants_positions[j]) {
+                        if (i == constants_positions[j]) {
                             ASSERT(constants_positions[j] < inst->getNumOperands() - 1);
                             is_const = true;
-                            if(!llvm::isa<llvm::Constant>(inst->getOperand(i))) {
+                            if (!llvm::isa<llvm::Constant>(inst->getOperand(i))) {
                                 std::cerr << "\noperand " << i << " must be constant, but it is not\n";
                                 return false;
                             }
                             break;
                         }
                     }
-                    if(!is_const && llvm::isa<llvm::Constant>(inst->getOperand(i))) {
+                    if (!is_const && llvm::isa<llvm::Constant>(inst->getOperand(i))) {
                         put_constant(llvm::cast<llvm::Constant>(inst->getOperand(i)), frame);
                     }
                 }
                 return true;
             }
 
-
             std::uint32_t extract_prover_idx_metadata(const llvm::Instruction *inst) {
-                const llvm::MDNode* metaDataNode = inst->getMetadata("zk_multi_prover");
+                const llvm::MDNode *metaDataNode = inst->getMetadata("zk_multi_prover");
                 if (metaDataNode) {
                     const llvm::MDString *MDS = llvm::dyn_cast<llvm::MDString>(metaDataNode->getOperand(0));
                     return std::stoi(MDS->getString().str());
@@ -206,8 +194,9 @@ namespace nil {
             void handle_scalar_cmp(const llvm::ICmpInst *inst, map_type &frame) {
                 llvm::CmpInst::Predicate p = inst->getPredicate();
                 const common_component_parameters param = {targetProverIdx, gen_mode};
-                handle_comparison_component<BlueprintFieldType> (
-                    inst, frame, p, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                handle_comparison_component<BlueprintFieldType>(inst, frame, p, circuits[currProverIdx],
+                                                                assignments[currProverIdx], internal_storage,
+                                                                statistics, param);
             }
 
             void handle_vector_cmp(const llvm::ICmpInst *inst, stack_frame<var> &frame) {
@@ -226,52 +215,52 @@ namespace nil {
 
                 const common_component_parameters param = {targetProverIdx, gen_mode};
                 for (size_t i = 0; i < lhs.size(); ++i) {
-                    using eq_component_type = components::equality_flag<
-                        crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>, BlueprintFieldType>;
+                    using eq_component_type =
+                        components::equality_flag<crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>,
+                                                  BlueprintFieldType>;
                     auto v = handle_comparison_component_eq_neq<BlueprintFieldType, eq_component_type>(
-                        inst->getPredicate(), lhs[i], rhs[i], bitness,
-                        circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        inst->getPredicate(), lhs[i], rhs[i], bitness, circuits[currProverIdx],
+                        assignments[currProverIdx], internal_storage, statistics, param);
 
                     res.emplace_back(v.output);
                 }
-                handle_result<BlueprintFieldType>
-                        (assignments[currProverIdx], inst, frame, res, gen_mode);
+                handle_result<BlueprintFieldType>(assignments[currProverIdx], inst, frame, res, gen_mode);
             }
 
             void handle_curve_cmp(const llvm::ICmpInst *inst, stack_frame<var> &frame) {
                 ASSERT(llvm::cast<llvm::EllipticCurveType>(inst->getOperand(0)->getType())->getCurveKind() ==
-                   llvm::cast<llvm::EllipticCurveType>(inst->getOperand(1)->getType())->getCurveKind());
+                       llvm::cast<llvm::EllipticCurveType>(inst->getOperand(1)->getType())->getCurveKind());
 
                 const std::vector<var> &lhs = frame.vectors[inst->getOperand(0)];
                 const std::vector<var> &rhs = frame.vectors[inst->getOperand(1)];
                 ASSERT(lhs.size() != 0 && lhs.size() == rhs.size());
 
-                ASSERT_MSG(inst->getPredicate() == llvm::CmpInst::ICMP_EQ, "only == comparison is implemented for curve elements");
+                ASSERT_MSG(inst->getPredicate() == llvm::CmpInst::ICMP_EQ,
+                           "only == comparison is implemented for curve elements");
 
                 std::vector<var> res;
 
-                using eq_component_type = components::equality_flag<
-                crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>, BlueprintFieldType>;
+                using eq_component_type =
+                    components::equality_flag<crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>,
+                                              BlueprintFieldType>;
 
                 const common_component_parameters param = {targetProverIdx, gen_mode};
                 for (size_t i = 0; i < lhs.size(); ++i) {
                     auto v = handle_comparison_component_eq_neq<BlueprintFieldType, eq_component_type>(
-                        inst->getPredicate(), lhs[i], rhs[i], 0,
-                        circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        inst->getPredicate(), lhs[i], rhs[i], 0, circuits[currProverIdx], assignments[currProverIdx],
+                        internal_storage, statistics, param);
                     res.emplace_back(v.output);
                 }
 
                 var are_curves_equal = res[0];
-
-                using component_type = components::logic_and<ArithmetizationType>;
 
                 for (size_t i = 1; i < lhs.size(); ++i) {
                     are_curves_equal = handle_logic_and<BlueprintFieldType>(
                         are_curves_equal, res[i], circuits[currProverIdx], assignments[currProverIdx], internal_storage,
                         statistics, param);
                 }
-                handle_result<BlueprintFieldType>
-                    (assignments[currProverIdx], inst, frame, {are_curves_equal}, gen_mode);
+                handle_result<BlueprintFieldType>(assignments[currProverIdx], inst, frame, {are_curves_equal},
+                                                  gen_mode);
             }
 
             void handle_ptr_cmp(const llvm::ICmpInst *inst, stack_frame<var> &frame) {
@@ -280,29 +269,30 @@ namespace nil {
                 ptr_type rhs = resolve_number<ptr_type>(frame, inst->getOperand(1));
                 bool res = false;
                 switch (inst->getPredicate()) {
-                case llvm::CmpInst::ICMP_EQ:
-                    res = lhs == rhs;
-                    break;
-                case llvm::CmpInst::ICMP_NE:
-                    res = !(lhs == rhs);
-                    break;
-                default:
-                    UNREACHABLE("Unsupported predicate");
-                    break;
+                    case llvm::CmpInst::ICMP_EQ:
+                        res = lhs == rhs;
+                        break;
+                    case llvm::CmpInst::ICMP_NE:
+                        res = !(lhs == rhs);
+                        break;
+                    default:
+                        UNREACHABLE("Unsupported predicate");
+                        break;
                 }
                 frame.scalars[inst] = put_value_into_internal_storage(res);
             }
 
-            template <typename NumberType>
+            template<typename NumberType>
             NumberType resolve_number(stack_frame<var> &frame, const llvm::Value *value) {
                 var scalar = frame.scalars[value];
                 return resolve_number<NumberType>(scalar);
             }
 
-            template <typename NumberType>
+            template<typename NumberType>
             NumberType resolve_number(var scalar) {
                 auto scalar_value = get_var_value(scalar);
-                static constexpr auto limit_value = typename BlueprintFieldType::integral_type(std::numeric_limits<NumberType>::max());
+                static constexpr auto limit_value =
+                    typename BlueprintFieldType::integral_type(std::numeric_limits<NumberType>::max());
                 auto integral_value = static_cast<typename BlueprintFieldType::integral_type>(scalar_value.data);
                 ASSERT_MSG(integral_value < limit_value, "");
                 NumberType number = static_cast<NumberType>(integral_value);
@@ -333,7 +323,8 @@ namespace nil {
                 // So we use deep-first search for scalar elements of the struct (or array)
                 std::stack<const llvm::Constant *> component_stack;
                 component_stack.push(constant_init);
-                ptr_type ptr = memory.add_cells(layout_resolver->get_type_layout<BlueprintFieldType>(constant_init->getType()));
+                ptr_type ptr =
+                    memory.add_cells(layout_resolver->get_type_layout<BlueprintFieldType>(constant_init->getType()));
                 ptr_type res = ptr;
                 while (!component_stack.empty()) {
                     const llvm::Constant *constant = component_stack.top();
@@ -351,7 +342,8 @@ namespace nil {
                         UNREACHABLE("Unsupported pointer initialization!");
                     }
                     if (!type->isAggregateType() && !type->isVectorTy()) {
-                        column_type<BlueprintFieldType> marshalled_field_val = marshal_field_val<BlueprintFieldType>(constant);
+                        column_type<BlueprintFieldType> marshalled_field_val =
+                            marshal_field_val<BlueprintFieldType>(constant);
                         for (int i = 0; i < marshalled_field_val.size(); i++) {
                             auto variable = put_constant_into_assignment(marshalled_field_val[i]);
                             memory.store(ptr++, variable);
@@ -398,18 +390,16 @@ namespace nil {
                 }
             }
 
-            bool handle_intrinsic(const llvm::CallInst *inst, llvm::Intrinsic::ID id, stack_frame<var> &frame, uint32_t start_row) {
+            bool handle_intrinsic(const llvm::CallInst *inst, llvm::Intrinsic::ID id, stack_frame<var> &frame,
+                                  uint32_t start_row) {
                 // Passing constants to component directly is only supported for components below
-                if (
-                    id != llvm::Intrinsic::assigner_bit_decomposition &&
+                if (id != llvm::Intrinsic::assigner_bit_decomposition &&
                     id != llvm::Intrinsic::assigner_bit_decomposition_field &&
                     id != llvm::Intrinsic::assigner_bit_composition &&
                     id != llvm::Intrinsic::assigner_gate_arg_verifier &&
                     id != llvm::Intrinsic::assigner_permutation_arg_verifier &&
                     id != llvm::Intrinsic::assigner_lookup_arg_verifier &&
-                    id != llvm::Intrinsic::assigner_fri_array_swap &&
-                    id != llvm::Intrinsic::assigner_fri_cosets
-                    ) {
+                    id != llvm::Intrinsic::assigner_fri_array_swap && id != llvm::Intrinsic::assigner_fri_cosets) {
                     for (int i = 0; i < inst->getNumOperands(); ++i) {
                         llvm::Value *op = inst->getOperand(i);
                         if (llvm::isa<llvm::Constant>(op)) {
@@ -431,7 +421,9 @@ namespace nil {
                         return true;
                     }
                     case llvm::Intrinsic::assigner_poseidon: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::curves::pallas::base_field_type>::value) {
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::curves::pallas::base_field_type>::value) {
 
                             using component_type = components::poseidon<ArithmetizationType, BlueprintFieldType>;
 
@@ -443,88 +435,111 @@ namespace nil {
 
                             typename component_type::input_type instance_input = {input_state_var};
 
-                            handle_component<BlueprintFieldType, component_type>
-                                    (circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param, instance_input, inst, frame);
+                            handle_component<BlueprintFieldType, component_type>(
+                                circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics,
+                                param, instance_input, inst, frame);
                             return true;
-                        }
-                        else {
+                        } else {
                             UNREACHABLE("poseidon is implemented only for pallas native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_sha2_256: {
-                        handle_sha2_256_component<BlueprintFieldType>(inst, frame,
-                                                                                             circuits[currProverIdx],
-                                                                                             assignments[currProverIdx],
-                                                                                             internal_storage,
-                                                                                             statistics,
-                                                                                             param);
+                        handle_sha2_256_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                      assignments[currProverIdx], internal_storage,
+                                                                      statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_sha2_512: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::curves::pallas::base_field_type>::value) {
-                            handle_sha2_512_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::curves::pallas::base_field_type>::value) {
+                            handle_sha2_512_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                          assignments[currProverIdx], internal_storage,
+                                                                          statistics, param);
                             return true;
-                        }
-                        else {
+                        } else {
                             UNREACHABLE("sha512 is implemented only for pallas native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_optimal_ate_pairing: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
 
-                            handle_bls12381_pairing<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                            handle_bls12381_pairing<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                        assignments[currProverIdx], internal_storage,
+                                                                        statistics, param);
                             return true;
-                        }
-                        else {
+                        } else {
                             UNREACHABLE("bls12_optimal_ate_pairing is implemented only for bls12381_base native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_hash_to_curve: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
 
-                            handle_h2c<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                            handle_h2c<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                           assignments[currProverIdx], internal_storage, statistics,
+                                                           param);
                             return true;
-                        }
-                        else {
+                        } else {
                             UNREACHABLE("assigner_hash_to_curve is implemented only for bls12381_base native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_is_in_g1_check: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
-                            handle_is_in_g1<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
+                            handle_is_in_g1<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                assignments[currProverIdx], internal_storage,
+                                                                statistics, param);
                             return true;
-                        }
-                        else {
-                            UNREACHABLE("__builtin_assigner_is_in_g1_check is implemented only for bls12381_base native field");
+                        } else {
+                            UNREACHABLE(
+                                "__builtin_assigner_is_in_g1_check is implemented only for bls12381_base native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_is_in_g2_check: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
-                            handle_is_in_g2<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
+                            handle_is_in_g2<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                assignments[currProverIdx], internal_storage,
+                                                                statistics, param);
                             return true;
-                        }
-                        else {
-                            UNREACHABLE("__builtin_assigner_is_in_g2_check is implemented only for bls12381_base native field");
+                        } else {
+                            UNREACHABLE(
+                                "__builtin_assigner_is_in_g2_check is implemented only for bls12381_base native field");
                         }
                     }
                     case llvm::Intrinsic::assigner_gt_multiplication: {
-                        if constexpr (std::is_same<BlueprintFieldType, typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
-                            handle_fp12_mul<BlueprintFieldType>(inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if constexpr (std::is_same<
+                                          BlueprintFieldType,
+                                          typename nil::crypto3::algebra::fields::bls12_base_field<381>>::value) {
+                            handle_fp12_mul<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                assignments[currProverIdx], internal_storage,
+                                                                statistics, param);
                             return true;
-                        }
-                        else {
-                            UNREACHABLE("__builtin_assigner_gt_multiplication is implemented only for bls12381_base native field");
+                        } else {
+                            UNREACHABLE(
+                                "__builtin_assigner_gt_multiplication is implemented only for bls12381_base native "
+                                "field");
                         }
                     }
                     case llvm::Intrinsic::assigner_bit_decomposition_field:
                     case llvm::Intrinsic::assigner_bit_decomposition: {
                         ASSERT(check_operands_constantness(inst, {1, 3}, frame));
-                        handle_integer_bit_decomposition_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        handle_integer_bit_decomposition_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_bit_composition: {
                         ASSERT(check_operands_constantness(inst, {1, 2}, frame));
-                        handle_integer_bit_composition_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        handle_integer_bit_composition_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_print_native_pallas_field: {
@@ -588,21 +603,25 @@ namespace nil {
 
                         std::size_t bitness = inst->getOperand(0)->getType()->getPrimitiveSizeInBits();
 
-                        using eq_component_type = components::equality_flag<
-                        crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>, BlueprintFieldType>;
+                        using eq_component_type =
+                            components::equality_flag<crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>,
+                                                      BlueprintFieldType>;
 
-                        var comparison_result = handle_comparison_component_eq_neq<BlueprintFieldType, eq_component_type>(
-                            llvm::CmpInst::ICMP_EQ, logical_statement, zero_var, bitness,
-                            circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param).output;
+                        var comparison_result =
+                            handle_comparison_component_eq_neq<BlueprintFieldType, eq_component_type>(
+                                llvm::CmpInst::ICMP_EQ, logical_statement, zero_var, bitness, circuits[currProverIdx],
+                                assignments[currProverIdx], internal_storage, statistics, param)
+                                .output;
 
                         if (validity_check && gen_mode.has_assignments()) {
                             bool assigner_exit_check_input = get_var_value(comparison_result) == 0;
                             ASSERT_MSG(assigner_exit_check_input,
-                                      "assigner_exit_check input is false, verification will fail!\n");
+                                       "assigner_exit_check input is false, verification will fail!\n");
                         }
 
                         typename eq_component_type::input_type instance_input = {comparison_result, zero_var};
-                        handle_component_input<BlueprintFieldType, eq_component_type>(assignments[currProverIdx], internal_storage, instance_input, param);
+                        handle_component_input<BlueprintFieldType, eq_component_type>(
+                            assignments[currProverIdx], internal_storage, instance_input, param);
                         const auto input_vars = instance_input.all_vars();
                         ASSERT(input_vars.size() == 2);
                         circuits[currProverIdx].add_copy_constraint({input_vars[0].get(), input_vars[1].get()});
@@ -614,17 +633,19 @@ namespace nil {
                         const var &x = frame.scalars[inst->getOperand(0)];
                         const var &y = frame.scalars[inst->getOperand(1)];
 
-
                         if (validity_check && gen_mode.has_assignments()) {
                             bool exit_check_res = get_var_value(x) == get_var_value(y);
                             ASSERT_MSG(exit_check_res,
-                                      "assigner_exit_check_eq_pallas input is false, verification will fail!\n");
+                                       "assigner_exit_check_eq_pallas input is false, verification will fail!\n");
                         }
 
-                        using eq_component_type = components::equality_flag<crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>, BlueprintFieldType>;
+                        using eq_component_type =
+                            components::equality_flag<crypto3::zk::snark::plonk_constraint_system<BlueprintFieldType>,
+                                                      BlueprintFieldType>;
 
                         typename eq_component_type::input_type instance_input = {x, y};
-                        handle_component_input<BlueprintFieldType, eq_component_type>(assignments[currProverIdx], internal_storage, instance_input, param);
+                        handle_component_input<BlueprintFieldType, eq_component_type>(
+                            assignments[currProverIdx], internal_storage, instance_input, param);
                         const auto input_vars = instance_input.all_vars();
                         ASSERT(input_vars.size() == 2);
                         circuits[currProverIdx].add_copy_constraint({input_vars[0].get(), input_vars[1].get()});
@@ -632,35 +653,54 @@ namespace nil {
                         return true;
                     }
                     case llvm::Intrinsic::assigner_fri_lin_inter: {
-                        handle_fri_lin_inter_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        handle_fri_lin_inter_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx],
+                                                                           assignments[currProverIdx], internal_storage,
+                                                                           statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_fri_cosets: {
-                        ASSERT_MSG(check_operands_constantness(inst, {1, 2}, frame), "result length, omega and total_bits must be constants");
-                        handle_fri_cosets_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        ASSERT_MSG(check_operands_constantness(inst, {1, 2}, frame),
+                                   "result length, omega and total_bits must be constants");
+                        handle_fri_cosets_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx],
+                                                                        assignments[currProverIdx], internal_storage,
+                                                                        statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_gate_arg_verifier: {
-                        ASSERT_MSG(check_operands_constantness(inst, {1, 2, 4}, frame), "gates_sizes, gates and selectors amount must be constants");
-                        handle_gate_arg_verifier_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        ASSERT_MSG(check_operands_constantness(inst, {1, 2, 4}, frame),
+                                   "gates_sizes, gates and selectors amount must be constants");
+                        handle_gate_arg_verifier_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_permutation_arg_verifier: {
                         ASSERT_MSG(check_operands_constantness(inst, {3}, frame), "f, se, sigma size must be constant");
-                        handle_permutation_arg_verifier_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        handle_permutation_arg_verifier_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_lookup_arg_verifier: {
                         std::vector<std::size_t> constants_positions = {};
-                        for (std::size_t i = 0; i < 8; i++) { constants_positions.push_back(i);}
-                        for (std::size_t i = 4; i < 13; i++) { constants_positions.push_back(2*i + 1);}
-                        ASSERT_MSG(check_operands_constantness(inst, constants_positions, frame), "vectors sizes must be constants");
-                        handle_lookup_arg_verifier_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        for (std::size_t i = 0; i < 8; i++) {
+                            constants_positions.push_back(i);
+                        }
+                        for (std::size_t i = 4; i < 13; i++) {
+                            constants_positions.push_back(2 * i + 1);
+                        }
+                        ASSERT_MSG(check_operands_constantness(inst, constants_positions, frame),
+                                   "vectors sizes must be constants");
+                        handle_lookup_arg_verifier_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
                     case llvm::Intrinsic::assigner_fri_array_swap: {
                         ASSERT_MSG(check_operands_constantness(inst, {1}, frame), "array size must be constant");
-                        handle_fri_array_swap_component<BlueprintFieldType>(inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        handle_fri_array_swap_component<BlueprintFieldType>(
+                            inst, frame, memory, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                            statistics, param);
                         return true;
                     }
 
@@ -673,7 +713,7 @@ namespace nil {
             }
 
             void handle_store(ptr_type ptr, const llvm::Value *val, stack_frame<var> &frame) {
-                auto store_scalar = [this](ptr_type ptr, var v, size_t type_size) ->ptr_type {
+                auto store_scalar = [this](ptr_type ptr, var v, size_t type_size) -> ptr_type {
                     auto &cell = memory[ptr];
                     size_t cur_offset = cell.offset;
                     size_t cell_size = cell.size;
@@ -732,11 +772,10 @@ namespace nil {
             }
 
             // Handle pointer adjustment specified by the first GEP index
-            ptr_type handle_initial_gep_adjustment(const llvm::Value *pointer_operand, const llvm::Value *initial_idx_operand,
-                                                   stack_frame<var> &frame,
+            ptr_type handle_initial_gep_adjustment(const llvm::Value *pointer_operand,
+                                                   const llvm::Value *initial_idx_operand, stack_frame<var> &frame,
                                                    llvm::Type *gep_ty) {
-                typename BlueprintFieldType::value_type base_ptr =
-                    get_var_value(frame.scalars[pointer_operand]);
+                typename BlueprintFieldType::value_type base_ptr = get_var_value(frame.scalars[pointer_operand]);
                 auto base_ptr_number = resolve_number<ptr_type>(frame.scalars[pointer_operand]);
                 var gep_initial_idx = frame.scalars[initial_idx_operand];
                 size_t cells_for_type = layout_resolver->get_cells_num<BlueprintFieldType>(gep_ty);
@@ -750,7 +789,8 @@ namespace nil {
                 int resolved_idx = 0;
                 // The index could be negative, so we need to take the difference with the modulus in this case
                 if (adjusted_ptr < base_ptr) {
-                    auto sub = BlueprintFieldType::modulus - static_cast<typename BlueprintFieldType::integral_type>(get_var_value(gep_initial_idx).data);
+                    auto sub = BlueprintFieldType::modulus - static_cast<typename BlueprintFieldType::integral_type>(
+                                                                 get_var_value(gep_initial_idx).data);
                     resolved_idx = static_cast<int>(sub) * -1;
                 } else {
                     resolved_idx = resolve_number<int>(gep_initial_idx);
@@ -772,7 +812,7 @@ namespace nil {
 
             typename BlueprintFieldType::value_type handle_gep(const llvm::Value *pointer_operand,
                                                                const llvm::Value *initial_idx_operand,
-                                                               llvm::Type* gep_ty,
+                                                               llvm::Type *gep_ty,
                                                                const std::vector<int> &gep_indices,
                                                                stack_frame<var> &frame) {
                 auto ptr_number = handle_initial_gep_adjustment(pointer_operand, initial_idx_operand, frame, gep_ty);
@@ -780,11 +820,11 @@ namespace nil {
 
                 if (gep_indices.size() > 0) {
                     if (!gep_ty->isAggregateType()) {
-                        std::cerr << "GEP instruction with > 1 indices must operate on aggregate type!"
-                                  << std::endl;
+                        std::cerr << "GEP instruction with > 1 indices must operate on aggregate type!" << std::endl;
                         return 0;
                     }
-                    auto [resolved_offset, hint] = layout_resolver->resolve_offset_with_index_hint<BlueprintFieldType>(gep_ty, gep_indices);
+                    auto [resolved_offset, hint] =
+                        layout_resolver->resolve_offset_with_index_hint<BlueprintFieldType>(gep_ty, gep_indices);
                     size_t expected_offset = memory[ptr_number].offset + resolved_offset;
                     while (memory[ptr_number + hint].size == 0) {
                         ++hint;
@@ -835,8 +875,7 @@ namespace nil {
                     column_type<BlueprintFieldType> marshalled_field_val = marshal_field_val<BlueprintFieldType>(c);
                     if (marshalled_field_val.size() == 1) {
                         frame.scalars[c] = put_constant_into_assignment(marshalled_field_val[0]);
-                    }
-                    else {
+                    } else {
                         frame.vectors[c] = {};
                         for (std::size_t i = 0; i < marshalled_field_val.size(); i++) {
                             frame.vectors[c].push_back(put_constant_into_assignment(marshalled_field_val[i]));
@@ -854,7 +893,7 @@ namespace nil {
                         auto layout = layout_resolver->get_type_layout<BlueprintFieldType>(undef_type);
                         ptr_type ptr = memory.add_cells(layout);
                         for (size_t i = 0; i < layout_resolver->get_cells_num<BlueprintFieldType>(undef_type); ++i) {
-                            memory.store(ptr+i, undef_var);
+                            memory.store(ptr + i, undef_var);
                         }
                         frame.scalars[c] = put_constant_into_assignment(ptr);
                     }
@@ -871,50 +910,50 @@ namespace nil {
                         llvm::Constant *elem = cv->getAggregateElement(i);
                         if (llvm::isa<llvm::UndefValue>(elem))
                             continue;
-                        column_type<BlueprintFieldType> marshalled_field_val = marshal_field_val<BlueprintFieldType>(elem);
+                        column_type<BlueprintFieldType> marshalled_field_val =
+                            marshal_field_val<BlueprintFieldType>(elem);
                         for (std::size_t j = 0; j < marshalled_field_val.size(); j++) {
                             result_vector[i * arg_num + j] = put_constant_into_assignment(marshalled_field_val[j]);
                         }
-
                     }
                     frame.vectors[c] = result_vector;
                 } else if (auto expr = llvm::dyn_cast<llvm::ConstantExpr>(c)) {
-                    for (int i = 0; i < expr->getNumOperands(); ++i) {
+                    for (unsigned int i = 0; i < expr->getNumOperands(); ++i) {
                         put_constant(expr->getOperand(i), frame);
                     }
                     switch (expr->getOpcode()) {
-                    case llvm::Instruction::PtrToInt:
-                        handle_ptrtoint(expr, expr->getOperand(0), frame);
-                        break;
-                    case llvm::Instruction::GetElementPtr: {
-                        if (gen_mode.has_assignments()) {
-                            std::vector<int> gep_indices;
-                            for (unsigned i = 2; i < expr->getNumOperands(); ++i) {
-                                int gep_index = resolve_number<int>(frame, expr->getOperand(i));
-                                gep_indices.push_back(gep_index);
-                            }
+                        case llvm::Instruction::PtrToInt:
+                            handle_ptrtoint(expr, expr->getOperand(0), frame);
+                            break;
+                        case llvm::Instruction::GetElementPtr: {
+                            if (gen_mode.has_assignments()) {
+                                std::vector<int> gep_indices;
+                                for (unsigned i = 2; i < expr->getNumOperands(); ++i) {
+                                    int gep_index = resolve_number<int>(frame, expr->getOperand(i));
+                                    gep_indices.push_back(gep_index);
+                                }
 
-                            // getSourceElementType for ConstantExpr
-                            llvm::gep_type_iterator type_it = gep_type_begin(expr);
-                            llvm::Type *source_element_type = type_it.getIndexedType();
-                            if (source_element_type == nullptr) {
-                                std::cerr
-                                    << "Can't extract source element type for GetElementPtr constant expression!"
-                                    << std::endl;
-                                ASSERT(false);
-                            }
+                                // getSourceElementType for ConstantExpr
+                                llvm::gep_type_iterator type_it = gep_type_begin(expr);
+                                llvm::Type *source_element_type = type_it.getIndexedType();
+                                if (source_element_type == nullptr) {
+                                    std::cerr
+                                        << "Can't extract source element type for GetElementPtr constant expression!"
+                                        << std::endl;
+                                    ASSERT(false);
+                                }
 
-                            auto gep_res = handle_gep(expr->getOperand(0), expr->getOperand(1), source_element_type,
-                                                        gep_indices, frame);
-                            ASSERT(gep_res != 0);
-                            frame.scalars[c] = put_constant_into_assignment(gep_res);
-                        } else {
-                            frame.scalars[c] = put_constant_into_assignment(0);
+                                auto gep_res = handle_gep(expr->getOperand(0), expr->getOperand(1), source_element_type,
+                                                          gep_indices, frame);
+                                ASSERT(gep_res != 0);
+                                frame.scalars[c] = put_constant_into_assignment(gep_res);
+                            } else {
+                                frame.scalars[c] = put_constant_into_assignment(0);
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    default:
-                        UNREACHABLE(std::string("Unhandled constant expression: ") + expr->getOpcodeName());
+                        default:
+                            UNREACHABLE(std::string("Unhandled constant expression: ") + expr->getOpcodeName());
                     }
                 } else if (auto addr = llvm::dyn_cast<llvm::BlockAddress>(c)) {
                     frame.scalars[c] = labels[addr->getBasicBlock()];
@@ -931,7 +970,7 @@ namespace nil {
                 }
             }
 
-            void restore_state(const AssignerState& assigner_state) {
+            void restore_state(const AssignerState &assigner_state) {
                 predecessor = assigner_state.predecessor;
                 currProverIdx = assigner_state.currProverIdx;
                 cpp_values = assigner_state.cpp_values;
@@ -939,7 +978,7 @@ namespace nil {
                 finished = assigner_state.finished;
             }
 
-            const llvm::Instruction *handle_branch(const llvm::Instruction* inst) {
+            const llvm::Instruction *handle_branch(const llvm::Instruction *inst) {
                 auto next_inst = inst;
                 const auto stack_size = curr_branch.back().second;
                 while (true) {
@@ -965,8 +1004,8 @@ namespace nil {
 
                 if ((userProverIdx != currProverIdx && userProverIdx != currProverIdx + 1) ||
                     userProverIdx >= maxNumProvers) {
-                    std::cout << "WARNING: ignored user defined prover index " << userProverIdx
-                              << ", must be " << currProverIdx + 1 << std::endl;
+                    std::cout << "WARNING: ignored user defined prover index " << userProverIdx << ", must be "
+                              << currProverIdx + 1 << std::endl;
                     userProverIdx = currProverIdx;
                 }
 
@@ -1003,18 +1042,23 @@ namespace nil {
                     case llvm::Instruction::Add: {
 
                         if (inst->getOperand(0)->getType()->isIntegerTy()) {
-                            handle_integer_addition_component<BlueprintFieldType>(
-                                        inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                            handle_integer_addition_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                  assignments[currProverIdx],
+                                                                                  internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
-                        if (inst->getOperand(0)->getType()->isFieldTy() && inst->getOperand(1)->getType()->isFieldTy()) {
-                            handle_field_addition_component<BlueprintFieldType>(
-                                        inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if (inst->getOperand(0)->getType()->isFieldTy() &&
+                            inst->getOperand(1)->getType()->isFieldTy()) {
+                            handle_field_addition_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                assignments[currProverIdx],
+                                                                                internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
-                        } else if (inst->getOperand(0)->getType()->isCurveTy() && inst->getOperand(1)->getType()->isCurveTy()) {
-                            handle_curve_addition_component<BlueprintFieldType>(
-                                        inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        } else if (inst->getOperand(0)->getType()->isCurveTy() &&
+                                   inst->getOperand(1)->getType()->isCurveTy()) {
+                            handle_curve_addition_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                assignments[currProverIdx],
+                                                                                internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("curve + scalar is undefined");
@@ -1025,17 +1069,22 @@ namespace nil {
                     case llvm::Instruction::Sub: {
                         if (inst->getOperand(0)->getType()->isIntegerTy()) {
                             handle_integer_subtraction_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
-                        if (inst->getOperand(0)->getType()->isFieldTy() && inst->getOperand(1)->getType()->isFieldTy()) {
-                            handle_field_subtraction_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if (inst->getOperand(0)->getType()->isFieldTy() &&
+                            inst->getOperand(1)->getType()->isFieldTy()) {
+                            handle_field_subtraction_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                   assignments[currProverIdx],
+                                                                                   internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
-                        } else if (inst->getOperand(0)->getType()->isCurveTy() && inst->getOperand(1)->getType()->isCurveTy()) {
-                            handle_curve_subtraction_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        } else if (inst->getOperand(0)->getType()->isCurveTy() &&
+                                   inst->getOperand(1)->getType()->isCurveTy()) {
+                            handle_curve_subtraction_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                   assignments[currProverIdx],
+                                                                                   internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("curve - scalar is undefined");
@@ -1047,13 +1096,16 @@ namespace nil {
 
                         if (inst->getOperand(0)->getType()->isIntegerTy()) {
                             handle_integer_multiplication_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
-                        if (inst->getOperand(0)->getType()->isFieldTy() && inst->getOperand(1)->getType()->isFieldTy()) {
+                        if (inst->getOperand(0)->getType()->isFieldTy() &&
+                            inst->getOperand(1)->getType()->isFieldTy()) {
                             handle_field_multiplication_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
@@ -1062,55 +1114,63 @@ namespace nil {
                         return inst->getNextNonDebugInstruction();
                     }
                     case llvm::Instruction::CMul: {
-                        if (
-                            (inst->getOperand(0)->getType()->isCurveTy() && inst->getOperand(1)->getType()->isFieldTy()) ||
-                            (inst->getOperand(1)->getType()->isCurveTy() && inst->getOperand(0)->getType()->isFieldTy())) {
+                        if ((inst->getOperand(0)->getType()->isCurveTy() &&
+                             inst->getOperand(1)->getType()->isFieldTy()) ||
+                            (inst->getOperand(1)->getType()->isCurveTy() &&
+                             inst->getOperand(0)->getType()->isFieldTy())) {
                             handle_curve_multiplication_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("cmul opcode is defined only for curveTy * fieldTy");
                         }
                     }
                     case llvm::Instruction::UDiv: {
-                        if (inst->getOperand(0)->getType()->isIntegerTy() && inst->getOperand(1)->getType()->isIntegerTy()) {
+                        if (inst->getOperand(0)->getType()->isIntegerTy() &&
+                            inst->getOperand(1)->getType()->isIntegerTy()) {
                             handle_integer_division_remainder_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param, true);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param, true);
                             return inst->getNextNonDebugInstruction();
-                        }
-                        else if (inst->getOperand(0)->getType()->isFieldTy() && inst->getOperand(1)->getType()->isFieldTy()) {
-                            handle_field_division_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        } else if (inst->getOperand(0)->getType()->isFieldTy() &&
+                                   inst->getOperand(1)->getType()->isFieldTy()) {
+                            handle_field_division_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                assignments[currProverIdx],
+                                                                                internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
-                        }
-                        else {
+                        } else {
                             UNREACHABLE("UDiv opcode is defined only for integerTy and fieldTy");
                         }
                     }
                     case llvm::Instruction::URem: {
-                        if (inst->getOperand(0)->getType()->isIntegerTy() && inst->getOperand(1)->getType()->isIntegerTy()) {
+                        if (inst->getOperand(0)->getType()->isIntegerTy() &&
+                            inst->getOperand(1)->getType()->isIntegerTy()) {
                             handle_integer_division_remainder_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param, false);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param, false);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("URem opcode is defined only for integerTy");
                         }
                     }
                     case llvm::Instruction::Shl: {
-                        if (inst->getOperand(0)->getType()->isIntegerTy() && inst->getOperand(1)->getType()->isIntegerTy()) {
+                        if (inst->getOperand(0)->getType()->isIntegerTy() &&
+                            inst->getOperand(1)->getType()->isIntegerTy()) {
                             handle_integer_bit_shift_constant_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param,
-                                        nil::blueprint::components::bit_shift_mode::LEFT);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param, nil::blueprint::components::bit_shift_mode::LEFT);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("shl opcode is defined only for integerTy");
                         }
                     }
                     case llvm::Instruction::LShr: {
-                        if (inst->getOperand(0)->getType()->isIntegerTy() && inst->getOperand(1)->getType()->isIntegerTy()) {
+                        if (inst->getOperand(0)->getType()->isIntegerTy() &&
+                            inst->getOperand(1)->getType()->isIntegerTy()) {
                             handle_integer_bit_shift_constant_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param,
-                                        nil::blueprint::components::bit_shift_mode::RIGHT);
+                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage,
+                                statistics, param, nil::blueprint::components::bit_shift_mode::RIGHT);
                             return inst->getNextNonDebugInstruction();
                         } else {
                             UNREACHABLE("LShr opcode is defined only for integerTy");
@@ -1119,14 +1179,17 @@ namespace nil {
                     case llvm::Instruction::SDiv: {
 
                         if (inst->getOperand(0)->getType()->isIntegerTy()) {
-                            handle_integer_division_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                            handle_integer_division_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                  assignments[currProverIdx],
+                                                                                  internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
-                        if (inst->getOperand(0)->getType()->isFieldTy() && inst->getOperand(1)->getType()->isFieldTy()) {
-                            handle_field_division_component<BlueprintFieldType>(
-                                inst, frame, circuits[currProverIdx], assignments[currProverIdx], internal_storage, statistics, param);
+                        if (inst->getOperand(0)->getType()->isFieldTy() &&
+                            inst->getOperand(1)->getType()->isFieldTy()) {
+                            handle_field_division_component<BlueprintFieldType>(inst, frame, circuits[currProverIdx],
+                                                                                assignments[currProverIdx],
+                                                                                internal_storage, statistics, param);
                             return inst->getNextNonDebugInstruction();
                         }
 
@@ -1166,12 +1229,10 @@ namespace nil {
                             if (arg->getType()->isVectorTy() || arg->getType()->isCurveTy() ||
                                 (arg->getType()->isFieldTy() && field_arg_num<BlueprintFieldType>(arg_type) > 1)) {
                                 new_frame.vectors[arg] = frame.vectors[call_inst->getOperand(i)];
-                            }
-                            else {
+                            } else {
                                 ASSERT(variables.find(call_inst->getOperand(i)) != variables.end());
                                 new_variables[arg] = variables[call_inst->getOperand(i)];
                             }
-
                         }
                         new_frame.caller = call_inst;
                         call_stack.emplace(std::move(new_frame));
@@ -1181,7 +1242,7 @@ namespace nil {
                     case llvm::Instruction::ICmp: {
                         auto cmp_inst = llvm::cast<const llvm::ICmpInst>(inst);
                         llvm::Type *cmp_type = cmp_inst->getOperand(0)->getType();
-                        if (cmp_type->isIntegerTy()|| cmp_type->isFieldTy())
+                        if (cmp_type->isIntegerTy() || cmp_type->isFieldTy())
                             handle_scalar_cmp(cmp_inst, frame);
                         else if (cmp_type->isPointerTy())
                             handle_ptr_cmp(cmp_inst, frame);
@@ -1211,10 +1272,8 @@ namespace nil {
 
                         // TODO: replace mock with component
 
-                        typename BlueprintFieldType::integral_type x_integer(
-                            get_var_value(lhs).data);
-                        typename BlueprintFieldType::integral_type y_integer(
-                            get_var_value(rhs).data);
+                        typename BlueprintFieldType::integral_type x_integer(get_var_value(lhs).data);
+                        typename BlueprintFieldType::integral_type y_integer(get_var_value(rhs).data);
                         typename BlueprintFieldType::value_type res = (x_integer & y_integer);
                         variables[inst] = put_value_into_internal_storage(res);
 
@@ -1226,10 +1285,8 @@ namespace nil {
 
                         // TODO: replace mock with component
 
-                        typename BlueprintFieldType::integral_type x_integer(
-                            get_var_value(lhs).data);
-                        typename BlueprintFieldType::integral_type y_integer(
-                            get_var_value(rhs).data);
+                        typename BlueprintFieldType::integral_type x_integer(get_var_value(lhs).data);
+                        typename BlueprintFieldType::integral_type y_integer(get_var_value(rhs).data);
                         typename BlueprintFieldType::value_type res = (x_integer | y_integer);
                         variables[inst] = put_value_into_internal_storage(res);
                         return inst->getNextNonDebugInstruction();
@@ -1240,10 +1297,8 @@ namespace nil {
 
                         // TODO: replace mock with component
 
-                        typename BlueprintFieldType::integral_type x_integer(
-                            get_var_value(lhs).data);
-                        typename BlueprintFieldType::integral_type y_integer(
-                            get_var_value(rhs).data);
+                        typename BlueprintFieldType::integral_type x_integer(get_var_value(lhs).data);
+                        typename BlueprintFieldType::integral_type y_integer(get_var_value(rhs).data);
                         typename BlueprintFieldType::value_type res = (x_integer ^ y_integer);
                         variables[inst] = put_value_into_internal_storage(res);
                         return inst->getNextNonDebugInstruction();
@@ -1254,14 +1309,16 @@ namespace nil {
 
                         if (inst->getNumOperands() != 1) {
                             ASSERT(inst->getNumOperands() == 3);
-                            std::string false_name = inst->getOperand(1)->hasName() ? inst->getOperand(1)->getName().str() : "unknown";
-                            std::string true_name = inst->getOperand(2)->hasName() ? inst->getOperand(2)->getName().str() : "unknown";
+                            std::string false_name =
+                                inst->getOperand(1)->hasName() ? inst->getOperand(1)->getName().str() : "unknown";
+                            std::string true_name =
+                                inst->getOperand(2)->hasName() ? inst->getOperand(2)->getName().str() : "unknown";
                             auto false_bb = llvm::cast<llvm::BasicBlock>(inst->getOperand(1));
                             auto true_bb = llvm::cast<llvm::BasicBlock>(inst->getOperand(2));
                             var cond = variables[inst->getOperand(0)];
 
                             // check if loop
-                            const llvm::MDNode* metaDataNode = inst->getMetadata("llvm.loop");
+                            const llvm::MDNode *metaDataNode = inst->getMetadata("llvm.loop");
                             if (metaDataNode) {
                                 UNREACHABLE("Can't to process loop");
                             }
@@ -1275,14 +1332,17 @@ namespace nil {
                                 curr_branch.push_back(branch_desc(true, stack_size));
                                 if (!cond_val) {
                                     gen_mode = (gen_mode.has_assignments() || gen_mode.has_false_assignments()) ?
-                                        (gen_mode & generation_mode::circuit()) | generation_mode::false_assignments() :
-                                        gen_mode & generation_mode::circuit();
+                                                   (gen_mode & generation_mode::circuit()) |
+                                                       generation_mode::false_assignments() :
+                                                   gen_mode & generation_mode::circuit();
                                 }
 
-                                log.debug(boost::format("start handle true branch: %1% %2%") % curr_branch.size() % !gen_mode.has_assignments());
-                                const llvm::Instruction* true_next_inst = nullptr;
+                                log.debug(boost::format("start handle true branch: %1% %2%") % curr_branch.size() %
+                                          !gen_mode.has_assignments());
+                                const llvm::Instruction *true_next_inst = nullptr;
                                 if (!cond_val && true_name == "panic") {
-                                    log.debug(boost::format("skip handle true branch as false positive panic: %1%") % curr_branch.size());
+                                    log.debug(boost::format("skip handle true branch as false positive panic: %1%") %
+                                              curr_branch.size());
                                 } else {
                                     true_next_inst = handle_branch(&(true_bb->front()));
                                     log.debug(boost::format("stop handle true branch: %1% %2%") % curr_branch.size() %
@@ -1296,14 +1356,17 @@ namespace nil {
 
                                 if (cond_val) {
                                     gen_mode = (gen_mode.has_assignments() || gen_mode.has_false_assignments()) ?
-                                                  (gen_mode & generation_mode::circuit()) | generation_mode::false_assignments() :
-                                                  gen_mode & generation_mode::circuit();
+                                                   (gen_mode & generation_mode::circuit()) |
+                                                       generation_mode::false_assignments() :
+                                                   gen_mode & generation_mode::circuit();
                                 }
 
-                                log.debug(boost::format("start handle false branch: %1% %2%") % curr_branch.size() % !gen_mode.has_assignments());
+                                log.debug(boost::format("start handle false branch: %1% %2%") % curr_branch.size() %
+                                          !gen_mode.has_assignments());
                                 auto false_next_inst = true_next_inst;
                                 if (cond_val && false_name == "panic") {
-                                    log.debug(boost::format("skip handle false branch as false positive panic: %1%") % curr_branch.size());
+                                    log.debug(boost::format("skip handle false branch as false positive panic: %1%") %
+                                              curr_branch.size());
                                 } else {
                                     false_next_inst = handle_branch(&(false_bb->front()));
                                     log.debug(boost::format("stop handle false branch: %1% %2%") % curr_branch.size() %
@@ -1325,10 +1388,12 @@ namespace nil {
                             curr_branch.push_back(branch_desc(false, stack_size));
                             curr_branch.push_back(branch_desc(true, stack_size));
 
-                            log.debug(boost::format("start handle true branch: %1% %2%") % curr_branch.size() % !gen_mode.has_assignments());
-                            const llvm::Instruction* true_next_inst = nullptr;
+                            log.debug(boost::format("start handle true branch: %1% %2%") % curr_branch.size() %
+                                      !gen_mode.has_assignments());
+                            const llvm::Instruction *true_next_inst = nullptr;
                             if (true_name == "panic") {
-                                log.debug(boost::format("skip handle true branch as false positive panic: %1%") % curr_branch.size());
+                                log.debug(boost::format("skip handle true branch as false positive panic: %1%") %
+                                          curr_branch.size());
                             } else {
                                 true_next_inst = handle_branch(&(true_bb->front()));
                                 log.debug(boost::format("stop handle true branch: %1% %2%") % curr_branch.size() %
@@ -1338,10 +1403,12 @@ namespace nil {
                             restore_state(assigner_state);
                             curr_branch.pop_back();
 
-                            log.debug(boost::format("start handle false branch: %1% %2%") % curr_branch.size() % (gen_mode.has_assignments() == 0));
+                            log.debug(boost::format("start handle false branch: %1% %2%") % curr_branch.size() %
+                                      (gen_mode.has_assignments() == 0));
                             auto false_next_inst = true_next_inst;
                             if (false_name == "panic") {
-                                log.debug(boost::format("skip handle false branch as false positive panic: %1%") % curr_branch.size());
+                                log.debug(boost::format("skip handle false branch as false positive panic: %1%") %
+                                          curr_branch.size());
                             } else {
                                 false_next_inst = handle_branch(&(false_bb->front()));
                                 log.debug(boost::format("stop handle false branch: %1% %2%") % curr_branch.size() %
@@ -1367,7 +1434,7 @@ namespace nil {
                                 llvm::Value *incoming_value = phi_node->getIncomingValue(i);
                                 llvm::Type *value_type = incoming_value->getType();
                                 if (value_type->isIntegerTy() || value_type->isPointerTy() ||
-                                           (value_type->isFieldTy() && field_arg_num<BlueprintFieldType>(value_type) == 1)) {
+                                    (value_type->isFieldTy() && field_arg_num<BlueprintFieldType>(value_type) == 1)) {
                                     ASSERT(variables.find(incoming_value) != variables.end());
                                     variables[phi_node] = variables[incoming_value];
                                 } else {
@@ -1397,8 +1464,9 @@ namespace nil {
                             for (auto Case : switch_inst->cases()) {
                                 if (Case.getCaseValue()->getValue().eq(cond_val)) {
                                     gen_mode = (gen_mode.has_assignments() && gen_mode.has_false_assignments()) ?
-                                            (gen_mode & generation_mode::circuit()) | generation_mode::false_assignments() :
-                                            gen_mode & generation_mode::circuit();
+                                                   (gen_mode & generation_mode::circuit()) |
+                                                       generation_mode::false_assignments() :
+                                                   gen_mode & generation_mode::circuit();
                                 }
                                 const AssignerState assigner_state(*this);
                                 curr_branch.push_back(branch_desc(false, call_stack.size()));
@@ -1462,7 +1530,7 @@ namespace nil {
                                 gep_indices.push_back(gep_index);
                             }
                             auto gep_res = handle_gep(gep->getPointerOperand(), gep->getOperand(1),
-                                                        gep->getSourceElementType(), gep_indices, frame);
+                                                      gep->getSourceElementType(), gep_indices, frame);
                             if (gep_res == 0) {
                                 std::cerr << "Incorrect GEP result!" << std::endl;
                                 return nullptr;
@@ -1501,9 +1569,9 @@ namespace nil {
                         ptr_type ptr = resolve_number<ptr_type>(frame, insert_inst->getAggregateOperand());
                         // TODO(maksenov): handle offset properly
                         ptr += layout_resolver
-                                    ->resolve_offset_with_index_hint<BlueprintFieldType>(
-                                        insert_inst->getAggregateOperand()->getType(), insert_inst->getIndices())
-                                    .second;
+                                   ->resolve_offset_with_index_hint<BlueprintFieldType>(
+                                       insert_inst->getAggregateOperand()->getType(), insert_inst->getIndices())
+                                   .second;
                         if (gen_mode.has_assignments()) {
                             memory.store(ptr, frame.scalars[insert_inst->getInsertedValueOperand()]);
                         } else {
@@ -1517,9 +1585,9 @@ namespace nil {
                         ptr_type ptr = resolve_number<ptr_type>(frame, extract_inst->getAggregateOperand());
                         // TODO(maksenov): handle offset properly
                         ptr += layout_resolver
-                                    ->resolve_offset_with_index_hint<BlueprintFieldType>(
-                                        extract_inst->getAggregateOperand()->getType(), extract_inst->getIndices())
-                                    .second;
+                                   ->resolve_offset_with_index_hint<BlueprintFieldType>(
+                                       extract_inst->getAggregateOperand()->getType(), extract_inst->getIndices())
+                                   .second;
                         frame.scalars[inst] = memory.load(ptr);
                         return inst->getNextNonDebugInstruction();
                     }
@@ -1567,8 +1635,8 @@ namespace nil {
                             // Final return
                             finished = true;
 
-                            if(print_output_format != no_print && gen_mode.has_assignments()) {
-                                if(print_output_format == hex) {
+                            if (print_output_format != no_print && gen_mode.has_assignments()) {
+                                if (print_output_format == hex) {
                                     std::cout << std::hex;
                                 }
                                 if (inst->getNumOperands() != 0) {
@@ -1580,7 +1648,8 @@ namespace nil {
                                         for (var x : res) {
                                             std::cout << get_var_value(x).data << std::endl;
                                         }
-                                    } else if (ret_val->getType()->isFieldTy() && field_arg_num<BlueprintFieldType>(ret_val->getType()) > 1) {
+                                    } else if (ret_val->getType()->isFieldTy() &&
+                                               field_arg_num<BlueprintFieldType>(ret_val->getType()) > 1) {
                                         std::vector<var> res = frame.vectors[ret_val];
                                         column_type<BlueprintFieldType> chopped_field;
                                         for (std::size_t i = 0; i < res.size(); i++) {
@@ -1588,10 +1657,14 @@ namespace nil {
                                         }
                                         llvm::GaloisFieldKind ret_field_type;
 
-                                        ASSERT_MSG(llvm::isa<llvm::GaloisFieldType>(ret_val->getType()), "only field types are handled here");
-                                        ret_field_type = llvm::cast<llvm::GaloisFieldType>(ret_val->getType())->getFieldKind();
+                                        ASSERT_MSG(llvm::isa<llvm::GaloisFieldType>(ret_val->getType()),
+                                                   "only field types are handled here");
+                                        ret_field_type =
+                                            llvm::cast<llvm::GaloisFieldType>(ret_val->getType())->getFieldKind();
 
-                                        std::cout << unmarshal_field_val<BlueprintFieldType>(ret_field_type, chopped_field) << std::endl;
+                                        std::cout
+                                            << unmarshal_field_val<BlueprintFieldType>(ret_field_type, chopped_field)
+                                            << std::endl;
 
                                     } else if (ret_val->getType()->isCurveTy()) {
                                         std::size_t curve_len = curve_arg_num<BlueprintFieldType>(ret_val->getType());
@@ -1599,11 +1672,12 @@ namespace nil {
                                         if (curve_len == 2) {
                                             std::cout << get_var_value(frame.vectors[ret_val][0]).data << "\n";
                                             std::cout << get_var_value(frame.vectors[ret_val][1]).data << "\n";
-                                        }
-                                        else {
+                                        } else {
                                             llvm::GaloisFieldKind ret_field_type;
-                                            ASSERT_MSG(llvm::isa<llvm::EllipticCurveType>(ret_val->getType()), "only curves can be handled here");
-                                            ret_field_type  = llvm::cast<llvm::EllipticCurveType>(ret_val->getType())->GetBaseFieldKind();
+                                            ASSERT_MSG(llvm::isa<llvm::EllipticCurveType>(ret_val->getType()),
+                                                       "only curves can be handled here");
+                                            ret_field_type = llvm::cast<llvm::EllipticCurveType>(ret_val->getType())
+                                                                 ->GetBaseFieldKind();
 
                                             std::vector<var> res = frame.vectors[ret_val];
 
@@ -1611,11 +1685,14 @@ namespace nil {
                                             column_type<BlueprintFieldType> chopped_field_y;
                                             for (std::size_t i = 0; i < curve_len / 2; i++) {
                                                 chopped_field_x.push_back(get_var_value(res[i]));
-                                                chopped_field_y.push_back(get_var_value(res[i + (curve_len/2)]));
+                                                chopped_field_y.push_back(get_var_value(res[i + (curve_len / 2)]));
                                             }
-                                            std::cout << unmarshal_field_val<BlueprintFieldType>(ret_field_type, chopped_field_x) << std::endl;
-                                            std::cout << unmarshal_field_val<BlueprintFieldType>(ret_field_type, chopped_field_y) << std::endl;
-
+                                            std::cout << unmarshal_field_val<BlueprintFieldType>(ret_field_type,
+                                                                                                 chopped_field_x)
+                                                      << std::endl;
+                                            std::cout << unmarshal_field_val<BlueprintFieldType>(ret_field_type,
+                                                                                                 chopped_field_y)
+                                                      << std::endl;
                                         }
                                     } else {
                                         std::cout << get_var_value(frame.scalars[ret_val]).data << std::endl;
@@ -1679,7 +1756,8 @@ namespace nil {
             }
 
             typename BlueprintFieldType::value_type get_var_value(const var &input_var) {
-                return detail::var_value<BlueprintFieldType, var>(input_var, assignments[currProverIdx], internal_storage, gen_mode.has_assignments());
+                return detail::var_value<BlueprintFieldType, var>(input_var, assignments[currProverIdx],
+                                                                  internal_storage, gen_mode.has_assignments());
             }
 
         public:
@@ -1729,17 +1807,15 @@ namespace nil {
                 return true;
             }
 
-            bool evaluate(
-                const boost::json::array &public_input,
-                const boost::json::array &private_input
-            ) {
+            bool evaluate(const boost::json::array &public_input, const boost::json::array &private_input) {
 
                 stack_frame<var> base_frame;
                 auto &variables = base_frame.scalars;
                 base_frame.caller = nullptr;
 
                 auto input_reader = InputReader<BlueprintFieldType, var, assignment_proxy<ArithmetizationType>>(
-                    base_frame, memory, assignments[currProverIdx], *layout_resolver, internal_storage, gen_mode.has_assignments());
+                    base_frame, memory, assignments[currProverIdx], *layout_resolver, internal_storage,
+                    gen_mode.has_assignments());
                 if (!input_reader.fill_public_input(*circuit_function, public_input, private_input, log)) {
                     std::cerr << "Public input does not match the circuit signature";
                     const std::string &error = input_reader.get_error();
@@ -1786,7 +1862,7 @@ namespace nil {
                     next_inst = handle_instruction(next_inst);
                     if (finished) {
                         if (gen_mode.has_size_estimation()) {
-                            std::cout << "\nallocated_rows: " <<  assignments[currProverIdx].allocated_rows() << "\n";
+                            std::cout << "\nallocated_rows: " << assignments[currProverIdx].allocated_rows() << "\n";
                             statistics.print();
                         }
                         return true;
@@ -1824,12 +1900,13 @@ namespace nil {
             component_calls statistics;
             /***
              * extention of assignment table for keep internal values which not presented in components
-             * identified as constant column with special internal_storage_index = std::numeric_limits<std::size_t>::max()
-            ***/
+             * identified as constant column with special internal_storage_index =
+             *std::numeric_limits<std::size_t>::max()
+             ***/
             column_type<BlueprintFieldType> internal_storage;
         };
 
-    }     // namespace blueprint
+    }    // namespace blueprint
 }    // namespace nil
 
 #endif    // CRYPTO3_BLUEPRINT_COMPONENT_INSTRUCTION_PARSER_HPP

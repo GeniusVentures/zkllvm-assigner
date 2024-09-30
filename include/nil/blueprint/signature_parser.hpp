@@ -67,7 +67,7 @@ namespace nil {
             ED25519,
         };
 
-        std::ostream& operator<<(std::ostream& os, const json_elem& elem) {
+        inline std::ostream& operator<<(std::ostream& os, const json_elem& elem) {
             switch (elem) {
                 case json_elem::UNDEFINED:
                     return os << "undefined";
@@ -123,7 +123,7 @@ namespace nil {
             }
         };
 
-        std::ostream& operator<<(std::ostream& os, const signature_node& s) {
+        inline std::ostream& operator<<(std::ostream& os, const signature_node& s) {
             os << s.elem;
             if (!s.children.empty()) {
                 os << "<";

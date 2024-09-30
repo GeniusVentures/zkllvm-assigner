@@ -77,7 +77,6 @@ namespace nil {
             const common_component_parameters& param,
             bool is_division) {
 
-            using non_native_policy_type = basic_non_native_policy<BlueprintFieldType>;
 
             llvm::Value *operand0 = inst->getOperand(0);
             llvm::Value *operand1 = inst->getOperand(1);
