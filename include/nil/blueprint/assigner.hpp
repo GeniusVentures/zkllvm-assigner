@@ -1787,6 +1787,33 @@ namespace nil {
                 circuit_function = &*entry_point_it;
                 return true;
             }
+            bool parse_ir_buffer(const char *if_buffer) {
+                llvm::SMDiagnostic diagnostic;
+                auto mem_buffer = llvm::MemoryBuffer::getMemBuffer(if_buffer);
+                module = parseIR(mem_buffer->getMemBufferRef(), diagnostic, context);
+                if (module == nullptr) {
+                    diagnostic.print("assigner", llvm::errs());
+                    return false;
+                }
+                layout_resolver = std::make_unique<LayoutResolver>(module->getDataLayout());
+                auto entry_point_it = module->end();
+                for (auto function_it = module->begin(); function_it != module->end(); ++function_it) {
+                    if (function_it->hasFnAttribute(llvm::Attribute::Circuit)) {
+                        if (entry_point_it != module->end()) {
+                            std::cerr << "More then one functions with [[circuit]] attribute in the module"
+                                      << std::endl;
+                            return false;
+                        }
+                        entry_point_it = function_it;
+                    }
+                }
+                if (entry_point_it == module->end()) {
+                    std::cerr << "Entry point is not found" << std::endl;
+                    return false;
+                }
+                circuit_function = &*entry_point_it;
+                return true;
+            }
 
             bool dump_public_input(const boost::json::array &public_input, const std::string &output_file) {
                 stack_frame<var> frame;
